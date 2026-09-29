@@ -190,14 +190,18 @@ class OthelloGUI:
         self.player_color = color
         self.npc_color = 'W' if color == 'B' else 'B'
         self.current_player = 'B'  # 黒が先攻
-        
+
         self.player_label.config(text=f"あなた: {'黒' if color == 'B' else '白'} | NPC: {'白' if color == 'B' else '黒'}")
         self.black_btn.config(state='disabled')
         self.white_btn.config(state='disabled')
         self.rotate_btn.config(state='normal')
-        self.status_label.config(text=f"ゲームスタート！ {'黒' if color == 'B' else '白'}が先攻です")
-        
+        self.status_label.config(text=f"ゲームスタート！ 黒が先攻です")
+
         self.draw_board()
+
+        # NPCが先攻の場合、最初のNPCターンを予約
+        if self.current_player == self.npc_color:
+            self.root.after(500, self.npc_turn)
     
     def draw_board(self):
         """盤面を描画"""
@@ -294,7 +298,7 @@ class OthelloGUI:
         elif key in ['Left', 'a', 'A', 'h', 'H']:
             self.cursor[1] = max(0, self.cursor[1] - 1)
             self.draw_board()
-        elif key in ['Down', 'd', 'D', 'l', 'L']:
+        elif key in ['Right', 'd', 'D', 'l', 'L']:
             self.cursor[1] = min(7, self.cursor[1] + 1)
             self.draw_board()
         elif key in ['Return', 'KP_Enter']:
@@ -427,6 +431,35 @@ class OthelloGUI:
                     moves.append((i, j))
         return moves
     
+    def _evaluate_move(self, row, col, player):
+        """手の評価スコア（大きいほど良い手）"""
+        score = 0
+        # コーナーはとても良い（30点）
+        if (row, col) in [(0, 0), (0, 7), (7, 0), (7, 7)]:
+            score += 30
+        # 端も良い（10点）
+        elif row == 0 or row == 7 or col == 0 or col == 7:
+            score += 10
+        # 相手の石を多く反転できるほど良い
+        opponent = 'W' if player == 'B' else 'B'
+        directions = [(-1, -1), (-1, 0), (-1, 1),
+                      (0, -1),           (0, 1),
+                      (1, -1),  (1, 0),  (1, 1)]
+        for dr, dc in directions:
+            r, c = row + dr, col + dc
+            count = 0
+            while 0 <= r < 8 and 0 <= c < 8 and self.board[r][c] == opponent:
+                count += 1
+                r += dr
+                c += dc
+            if 0 <= r < 8 and 0 <= c < 8 and self.board[r][c] == player:
+                score += count * 2
+        # 隅っこの次のマス（Xマス）は悪いのでペナルティ
+        if (row, col) in [(0, 1), (1, 0), (1, 1), (0, 6), (1, 7), (1, 6),
+                           (6, 0), (7, 1), (6, 1), (6, 7), (7, 6), (6, 6)]:
+            score -= 15
+        return score
+
     def check_game_over(self):
         """ゲーム終了判定"""
         b_moves = self.get_valid_moves('B')
