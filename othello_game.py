@@ -24,16 +24,13 @@ class OthelloGame:
 
     # ---------- 回転 ----------
     def rotate(self):
-        """ボードを時計回りに90°回転（1回）"""
+        """ボードを時計回りに90°回転（1回） - 物理的に盤面を回転"""
         self.board = [[self.board[7 - j][i] for j in range(8)] for i in range(8)]
         self.rotation = (self.rotation + 1) % 4
 
     def rotated_view(self):
-        """回転表示用の盤面を返す"""
-        view = [row[:] for row in self.board]
-        for _ in range(self.rotation):
-            view = [[view[7 - j][i] for j in range(8)] for i in range(8)]
-        return view
+        """現在の盤面をそのまま返す（回転は物理的にすでに適用済み）"""
+        return [row[:] for row in self.board]
 
     # ---------- 石の数 ----------
     def count_stones(self, color):
@@ -77,9 +74,9 @@ class OthelloGame:
         if not self.is_valid_move(row, col, player):
             return False
 
-        opponent = 'W' if player == 'B' else 'B'
         self.board[row][col] = player
 
+        opponent = 'W' if player == 'B' else 'B'
         directions = [(-1, -1), (-1, 0), (-1, 1),
                       (0, -1),           (0, 1),
                       (1, -1),  (1, 0),  (1, 1)]
@@ -95,6 +92,8 @@ class OthelloGame:
                 for fr, fc in to_flip:
                     self.board[fr][fc] = player
 
+        # 手番を切り替える
+        self.current_player = 'W' if self.current_player == 'B' else 'B'
         return True
 
     # ---------- 手番交代 / ゲーム終了 ----------

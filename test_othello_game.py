@@ -111,18 +111,16 @@ class TestOthelloGame:
         assert w_count == 3
     
     def test_multiple_flips(self, game):
+        # 横方向にWが並び、両端にBがある状況を作成
         game.board[2][2] = 'W'
-        game.board[3][2] = 'W'
-        game.board[4][2] = 'W'
         game.board[2][3] = '.'
-        game.board[4][3] = 'W'
-        
+        game.board[2][4] = 'W'
+        game.board[2][5] = 'B'  # 右端にBを配置して反転可能に
         game.current_player = 'B'
         assert game.make_move(2, 3) == True
         assert game.board[2][3] == 'B'
-        assert game.board[2][2] == 'B'
-        assert game.board[3][2] == 'B'
-        assert game.board[4][3] == 'B'
+        assert game.board[2][2] == 'B'  # 反転
+        assert game.board[2][4] == 'B'  # 反転
     
     def test_cursor_bounds(self, game):
         assert 0 <= game.cursor[0] <= 7
@@ -130,6 +128,7 @@ class TestOthelloGame:
     
     def test_no_flips_when_not_enclosed(self, game):
         game.board[2][3] = 'B'
+        game.board[3][4] = '.'  # 初期配置のBを無効化
         game.current_player = 'W'
         assert game.make_move(2, 4) == False
     
