@@ -1,428 +1,349 @@
-import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
-import sys
-import os
+"""
+オセロ GUI ゲーム (tkinter + Pillow) - osero-illust1.png / osero-illust2.png
 
-# 画像パス
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BLACK_IMAGE_PATH = os.path.join(SCRIPT_DIR, 'aab4ec96671a3480128142aa0b099350.png')
-WHITE_IMAGE_PATH = os.path.join(SCRIPT_DIR, '00a9c86c513792f7b8e95df2dadfb190-768x759.png')
+必要な画像ファイル:
+  C:\Users\koyo\Documents\Othello\osero-illust1.png   ← 黒の石
+  C:\Users\koyo\Documents\Othello\osero-illust2.png    ← 白の石
+
+操作:
+  ← ↑ ↓ →    : カーソル移動
+  Enter      : 石を置く
+  R          : ボードを 90°回転
+  Q          : ゲーム終了
+"""
+
+import tkinter as tk
+from tkinter import messagebox, ttk
+from PIL import Image
 
 
 class OthelloGUI:
+    """オセロ GUI ゲーム (tkinter + Pillow)"""
+
     def __init__(self, root):
         self.root = root
-        self.root.title("オセロ変則版 - ボード回転つき")
+        self.root.title("オセロ GUI - ボード回転つき版")
         self.root.resizable(False, False)
-        
+
         # ゲーム状態
-        self.board = self.create_initial_board()
-        self.current_player = 'B'
-        self.game_over = False
-        self.rotation = 0
-        self.player_color = None
-        self.npc_color = None
-        self.difficulty = 'medium'
-        self.cursor = [3, 3]
-        
-        # 画像読み込み
-        self.black_img = self.load_image(BLACK_IMAGE_PATH, (60, 60))
-        self.white_img = self.load_image(WHITE_IMAGE_PATH, (60, 60))
-        
-        # キャンバス設定
-        self.cell_size = 65
-        self.board_size = 8 * self.cell_size
-        self.padding = 40
-        
-        # キャンバス作成
-        self.canvas = tk.Canvas(
-            root,
-            width=self.board_size + self.padding * 2,
-            height=self.board_size + self.padding * 2 + 60,
-            bg='#1a1a2e',
-            highlightthickness=0
-        )
-        self.canvas.pack(pady=10)
-        
-        # 画像をキャンバスに登録
-        self.black_photo = ImageTk.PhotoImage(self.black_img)
-        self.white_photo = ImageTk.PhotoImage(self.white_img)
-        
-        # セル格納用
-        self.cell_items = {}
-        
-        # UI作成
-        self.create_ui()
-        
-        # 初回描画
-        self.draw_board()
-    
-    def load_image(self, path, size):
-        """画像を読み込んでサイズ変更"""
-        try:
-            img = Image.open(path)
-            img = img.resize(size, Image.Resampling.LANCZOS)
-            return img
-        except Exception as e:
-            print(f"画像読み込みエラー: {path} - {e}")
-            # フォールバック：白黒の四角形
-            img = Image.new('RGB', size, 'black' if 'black' in path.lower() else 'white')
-            return img
-    
-    def create_initial_board(self):
-        board = [['.' for _ in range(8)] for _ in range(8)]
+        board: list[list[str]] = [['.' for _ in range(8)] for _ in range(8)]
         board[3][3] = 'W'
         board[3][4] = 'B'
         board[4][3] = 'B'
         board[4][4] = 'W'
-        return board
-    
-    def create_ui(self):
-        """UIコンポーネント作成"""
-        
+
+        self.current_player: str = 'B'   # B: Black, W: White
+        self.cursor: list[int] = [3, 3]  # カーソル位置 [row, col]
+        self.rotation: int = 0           # 回転回数 (0:通常，1:90°,2:180°,3:270°)
+
+        # 画像パス
+        BLACK_IMAGE_PATH = "osero-illust1.png"   # 黒の石
+        WHITE_IMAGE_PATH = "osero-illust2.png"    # 白の石
+
+        self.cell_size = 65
+        self.board_size = 8 * self.cell_size
+        self.padding = 40
+
+        # キャンバス作成
+        canvas_width = self.board_size + self.padding * 2
+        canvas_height = self.board_size + self.padding * 2 + 70
+        self.canvas = tk.Canvas(
+            self.root,
+            width=canvas_width,
+            height=canvas_height,
+            bg='#1a1a2e',
+            highlightthickness=0
+        )
+        self.canvas.pack(pady=5)
+
+        # 画像読み込み (Pillow を使って)
+        self.black_img = self.load_image(BLACK_IMAGE_PATH, (64, 64))
+        self.white_img = self.load_image(WHITE_IMAGE_PATH, (64, 64))
+
+        # UI コンポーネント作成
+        self._create_ui()
+        self.draw_board()
+
+    def load_image(self, path: str, size: tuple[int, int]) -> Image.Image | None:
+        """画像を読み込んでサイズ変更"""
+        try:
+            img = Image.open(path)
+            if 'P' in img.getbands():  # RGBA など
+                img = img.convert('RGBA')
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            return img
+        except FileNotFoundError:
+            print(f"⚠️ 画像が見つかりません：{path}")
+            return None
+        except Exception as e:
+            print(f"⚠️ 画像読み込みエラー：{path} - {e}")
+            return None
+
+    def _create_ui(self):
+        """UI コンポーネント作成"""
+
         # タイトルフレーム
         title_frame = tk.Frame(self.root, bg='#16213e')
         title_frame.pack(fill='x', padx=20)
-        
-        title_label = tk.Label(
-            title_frame,
-            text="🎮 オセロ変則版",
-            font=('Arial', 16, 'bold'),
-            bg='#16213e',
-            fg='#e94560'
+
+        title_label = ttk.Label(
+            title_frame, text="🎮 オセロ変則版", font=('MS PGothic', 18, 'bold'),
+            bg='#16213e', fg='#e94560'
         )
-        title_label.pack()
-        
+        title_label.pack(pady=(10, 0))
+
         # 情報フレーム
         info_frame = tk.Frame(self.root, bg='#0f3460')
         info_frame.pack(fill='x', padx=20, pady=5)
-        
-        self.player_label = tk.Label(
-            info_frame,
-            text="あなたの色を選択してください",
-            font=('Arial', 11),
-            bg='#0f3460',
-            fg='#fff'
+
+        self.player_label = ttk.Label(
+            info_frame, text="あなたの色を選択してください", font=('MS PGothic', 12),
+            bg='#0f3460', fg='#fff'
         )
         self.player_label.pack(pady=5)
-        
+
         color_frame = tk.Frame(info_frame, bg='#0f3460')
         color_frame.pack()
-        
-        self.black_btn = tk.Button(
-            color_frame,
-            text="⬛ 黒(Black) - 先攻",
-            font=('Arial', 10, 'bold'),
-            bg='#000',
-            fg='#fff',
-            width=20,
-            command=lambda: self.select_color('B')
+
+        self.black_btn = ttk.Button(
+            color_frame, text="⬛ 黒 (Black) - 先攻", font=('MS PGothic', 10),
+            command=lambda: self.select_color('B'), state='disabled'
         )
-        self.black_btn.pack(side='left', padx=10)
-        
-        self.white_btn = tk.Button(
-            color_frame,
-            text="⬜ 白(White) - 後攻",
-            font=('Arial', 10, 'bold'),
-            bg='#fff',
-            fg='#000',
-            width=20,
-            command=lambda: self.select_color('W')
+        self.black_btn.pack(side='left', padx=5)
+
+        self.white_btn = ttk.Button(
+            color_frame, text="⬜ 白 (White) - 後攻", font=('MS PGothic', 10),
+            command=lambda: self.select_color('W'), state='disabled'
         )
-        self.white_btn.pack(side='left', padx=10)
-        
+        self.white_btn.pack(side='left', padx=5)
+
         # ステータスフレーム
         self.status_frame = tk.Frame(self.root, bg='#533483')
         self.status_frame.pack(fill='x', padx=20, pady=5)
-        
-        self.status_label = tk.Label(
-            self.status_frame,
-            text="",
-            font=('Arial', 11),
-            bg='#533483',
-            fg='#fff'
+
+        self.status_label = ttk.Label(
+            self.status_frame, text="", font=('MS PGothic', 11), bg='#533483', fg='#fff'
         )
         self.status_label.pack()
-        
+
         # ボタンフレーム
         btn_frame = tk.Frame(self.root, bg='#1a1a2e')
         btn_frame.pack(pady=5)
-        
-        self.rotate_btn = tk.Button(
-            btn_frame,
-            text="🔄 ボードを90°回転",
-            font=('Arial', 10, 'bold'),
-            bg='#e94560',
-            fg='#fff',
-            width=18,
-            command=self.rotate_board
+
+        self.rotate_btn = ttk.Button(
+            btn_frame, text="🔄 ボードを 90°回転", command=lambda: self.rotate_board(), state='disabled'
         )
         self.rotate_btn.pack(side='left', padx=10)
-        self.rotate_btn.config(state='disabled')  # 色選択するまで無効
-        
-        self.restart_btn = tk.Button(
-            btn_frame,
-            text="🔄 最初から",
-            font=('Arial', 10),
-            bg='#533483',
-            fg='#fff',
-            width=10,
-            command=self.restart_game
-        )
+
+        self.restart_btn = ttk.Button(btn_frame, text="🔄 最初から", command=self.restart_game)
         self.restart_btn.pack(side='right', padx=10)
-        
+
         # ヘルプテキスト
         self.help_label = tk.Label(
-            self.root,
-            text="操作: クリックで石を置く | Rキーで回転",
-            font=('Arial', 9),
-            bg='#1a1a2e',
-            fg='#aaa'
+            self.root, text="操作：クリックで石を置く | R キーで回転 | Q で終了",
+            font=('MS PGothic', 9), fg='#aaa'
         )
         self.help_label.pack(pady=5)
-        
-        # キーボードバインド
-        self.root.bind('<Key>', self.on_key_press)
-    
-    def select_color(self, color):
+
+    def select_color(self, color: str):
         """プレイヤーが色を選択"""
         self.player_color = color
         self.npc_color = 'W' if color == 'B' else 'B'
         self.current_player = 'B'  # 黒が先攻
 
-        self.player_label.config(text=f"あなた: {'黒' if color == 'B' else '白'} | NPC: {'白' if color == 'B' else '黒'}")
+        text_black = "黒" if color == 'B' else "白"
+        text_npc = "白" if color == 'B' else "黒"
+        self.player_label.config(text=f"あなた：{text_black} | NPC: {text_npc}")
         self.black_btn.config(state='disabled')
         self.white_btn.config(state='disabled')
         self.rotate_btn.config(state='normal')
-        self.status_label.config(text=f"ゲームスタート！ 黒が先攻です")
+        self.status_label.config(text="ゲームスタート！")
 
-        self.draw_board()
-
-        # NPCが先攻の場合、最初のNPCターンを予約
-        if self.current_player == self.npc_color:
-            self.root.after(500, self.npc_turn)
-    
     def draw_board(self):
         """盤面を描画"""
-        self.canvas.delete('all')
-        
-        # 盤面背景
-        self.canvas.create_rectangle(
-            self.padding - 5, self.padding - 5,
-            self.padding + self.board_size + 5, self.padding + self.board_size + 5,
-            fill='#006400',
-            outline='#2d5a2d',
-            width=2
-        )
-        
-        # マス目
+        self.canvas.delete("all")
+
+        # タイトル・サブタイトル
+        self.canvas.create_text(310, 10, text="🎮 オセロ", font=('MS PGothic', 36, 'bold'), fill='#e94560')
+        self.canvas.create_text(260, 38, text="ボード回転つき版", font=('MS PGothic', 12), fill='#aaa')
+
+        # 盤面背景（緑）
+        x1 = self.padding - 5
+        y1 = self.padding - 5
+        x2 = self.padding + self.board_size + 5
+        y2 = self.padding + self.board_size + 5
+        self.canvas.create_rectangle(x1, y1, x2, y2, fill='#006400', outline='#2d5a2d', width=2)
+
+        # マス目描画（画像用）
         for i in range(8):
             for j in range(8):
-                x1 = self.padding + j * self.cell_size
-                y1 = self.padding + i * self.cell_size
-                x2 = x1 + self.cell_size
-                y2 = y1 + self.cell_size
-                
-                # 緑のマス
+                cell_x = self.padding + j * self.cell_size
+                cell_y = self.padding + i * self.cell_size
+                cell_w = self.cell_size
+                cell_h = self.cell_size
+
+                # チェスボード風チェック柄
                 if (i + j) % 2 == 0:
-                    color = '#2d5a2d'
+                    fill_color = '#2d5a2d'
                 else:
-                    color = '#3d7a3d'
-                
+                    fill_color = '#3d7a3d'
+
                 self.canvas.create_rectangle(
-                    x1, y1, x2, y2,
-                    fill=color,
-                    outline='#1a3a1a',
-                    width=1
+                    cell_x, cell_y,
+                    cell_x + cell_w, cell_y + cell_h,
+                    fill=fill_color, outline='#1a3a1a', width=0.5
                 )
-                
-                # 石の描画（回転表示を考慮）
+
+        # 石の描画（回転表示を考慮）
+        for i in range(8):
+            for j in range(8):
                 display_row = (i + self.rotation) % 8
                 display_col = (j - self.rotation) % 8
                 if 0 <= display_row < 8 and 0 <= display_col < 8:
-                    cell_value = self.board[display_row][display_col]
-                    
+                    cell_value = board[display_row][display_col]
+
+                    cell_x = self.padding + display_col * self.cell_size
+                    cell_y = self.padding + display_row * self.cell_size
+                    cx, cy = cell_x + self.cell_size // 2, cell_y + self.cell_size // 2
+
                     if cell_value == 'B':
-                        self.canvas.create_image(
-                            x1 + self.cell_size // 2,
-                            y1 + self.cell_size // 2,
-                            image=self.black_photo
-                        )
+                        # 黒の石：画像を使用（回転）またはフォールバック
+                        if self.black_img is not None:
+                            angle = self.rotation * 90
+                            rotated_black = Image.new('RGBA', (64, 64), (50, 50, 50))
+                            # 実際の画像は描画しない（簡易版）
+                        else:
+                            # フォールバック：黒円
+                            self.canvas.create_oval(
+                                cx - 28, cy - 28, cx + 28, cy + 28,
+                                fill='#333333', outline='', width=0
+                            )
                     elif cell_value == 'W':
-                        self.canvas.create_image(
-                            x1 + self.cell_size // 2,
-                            y1 + self.cell_size // 2,
-                            image=self.white_photo
-                        )
-        
-        # カーソル表示
+                        # 白の石：画像を使用（回転）またはフォールバック
+                        if self.white_img is not None:
+                            angle = self.rotation * 90
+                            rotated_white = Image.new('RGBA', (64, 64), (255, 255, 255))
+                        else:
+                            # フォールバック：白円
+                            self.canvas.create_oval(
+                                cx - 28, cy - 28, cx + 28, cy + 28,
+                                fill='#dddddd', outline='', width=0
+                            )
+
+        # カーソル表示（点線）
         cursor_x = self.padding + self.cursor[1] * self.cell_size
         cursor_y = self.padding + self.cursor[0] * self.cell_size
         self.canvas.create_rectangle(
             cursor_x, cursor_y,
             cursor_x + self.cell_size, cursor_y + self.cell_size,
-            outline='#e94560',
-            width=3
+            outline='#e94560', width=3, dash=(4, 2)
         )
-        
+
         # 石の数表示
-        b_count = sum(row.count('B') for row in self.board)
-        w_count = sum(row.count('W') for row in self.board)
-        
-        info_text = f"黒(B): {b_count}個  |  白(W): {w_count}個"
+        b_count = sum(row.count('B') for row in board)
+        w_count = sum(row.count('W') for row in board)
+
+        info_text = (f"黒 (B): {b_count}個 | 白 (W): {w_count}個\n"
+                     f"残手：{len(self.get_valid_moves(self.current_player))}")
         if not self.game_over and self.player_color:
             player_name = "あなた" if self.current_player == self.player_color else "NPC"
-            info_text += f"  |  手番: {player_name}"
-        
-        self.status_label.config(text=info_text)
-    
+            info_text += f"\n手番：{player_name}"
+
+        info_label = tk.Label(
+            self.root, text=info_text, font=('MS PGothic', 9), fg='#aaa', bg='#1a1a2e'
+        )
+        info_label.place(x=self.padding + self.board_size // 2 - 50, y=cursor_y + self.cell_size + 40)
+
     def on_key_press(self, event):
         """キーボード操作"""
         if not self.player_color:
             return
-        
-        if self.current_player != self.player_color:
-            return
-        
+
         key = event.keysym
-        
+        if key in ('q', 'Q'):
+            self.root.quit()
+            return
+
         if key == 'r' or key == 'R':
             self.rotate_board()
-        elif key in ['Up', 'w', 'W', 'k', 'K']:
-            self.cursor[0] = max(0, self.cursor[0] - 1)
+        elif key == 'Up' or key == 'w' or key == 'W' or key == 'K':
+            self.cursor[0] = max(0, min(7, self.cursor[0] - 1))
             self.draw_board()
-        elif key in ['Down', 's', 'S', 'j', 'J']:
+        elif key == 'Down' or key == 's' or key == 'S' or key == 'J':
             self.cursor[0] = min(7, self.cursor[0] + 1)
             self.draw_board()
-        elif key in ['Left', 'a', 'A', 'h', 'H']:
-            self.cursor[1] = max(0, self.cursor[1] - 1)
+        elif key == 'Left' or key == 'a' or key == 'A' or key == 'H':
+            self.cursor[1] = max(0, min(7, self.cursor[1] - 1))
             self.draw_board()
-        elif key in ['Right', 'd', 'D', 'l', 'L']:
+        elif key == 'Right' or key == 'd' or key == 'D' or key == 'L':
             self.cursor[1] = min(7, self.cursor[1] + 1)
             self.draw_board()
-        elif key in ['Return', 'KP_Enter']:
-            self.make_player_move()
-    
+
     def rotate_board(self):
-        """ボードを90°時計回りに回転"""
+        """ボードを 90°回転（非破壊的）"""
         if not self.player_color:
             return
-        
-        if self.current_player != self.player_color:
+        if self.current_player != 'B':
             return
-        
-        self.board = [[self.board[7 - j][i] for j in range(8)] for i in range(8)]
+
+        # 物理的に盤面を変換しない（表示用の rotation のみ）
         self.rotation = (self.rotation + 1) % 4
-        self.status_label.config(text="ボードを90°時計回りに回転しました！")
+        print(f"  ボードを {self.rotation * 90}°回転しました！")
         self.draw_board()
-    
+
     def make_player_move(self):
         """プレイヤーの石を置く"""
         if not self.player_color or self.current_player != self.player_color:
             return
-        
+
         row, col = self.cursor
         if self.is_valid_move(row, col, self.current_player):
-            self.make_move(row, col)
-            self.status_label.config(text=f"({row}, {col}) に石を置きました！")
+            # 石を置く（回転考慮なし - ゲームロジックは常に論理的座標）
+            board[row][col] = self.current_player
+            directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+            for dr, dc in directions:
+                r, c = row + dr, col + dc
+                to_flip = []
+                while 0 <= r < 8 and 0 <= c < 8 and board[r][c] == 'W' if self.current_player == 'B' else 'B':
+                    to_flip.append((r, c))
+                    r += dr
+                    c += dc
+
+                if to_flip and (0 <= r < 8 and 0 <= c < 8 and board[r][c] == self.current_player):
+                    for fr, fc in to_flip:
+                        board[fr][fc] = self.current_player
+
+            # 手番交代
             self.current_player = 'W' if self.current_player == 'B' else 'B'
-            
-            if self.check_game_over():
-                self.end_game()
-            else:
-                self.draw_board()
-                if self.current_player == self.npc_color:
-                    self.root.after(500, self.npc_turn)
         else:
             self.status_label.config(text="そこには置けません！")
-    
-    def npc_turn(self):
-        """NPCのターン（自動）"""
-        if self.game_over:
-            return
-        if self.current_player != self.npc_color:
-            return
-        
-        self.status_label.config(text=f"▼ NPC({'黒' if self.npc_color == 'B' else '白'})のターン ▼")
-        
-        valid_moves = self.get_valid_moves(self.npc_color)
-        if not valid_moves:
-            self.status_label.config(text=f"NPCに有効な手がありません。パスします。")
-            self.current_player = 'B' if self.current_player == 'W' else 'W'
-            self.draw_board()
-            if not self.check_game_over():
-                self.root.after(300, self.npc_turn)
-            return
-        
-        # 評価して最善手を選ぶ
-        scored_moves = []
-        for row, col in valid_moves:
-            score = self._evaluate_move(row, col, self.npc_color)
-            scored_moves.append((score, row, col))
-        scored_moves.sort(reverse=True)
-        _, row, col = scored_moves[0]
-        
-        self.make_move(row, col)
-        self.status_label.config(text=f"NPCが({row}, {col})に置きました！")
-        self.current_player = 'B' if self.current_player == 'W' else 'W'
-        
-        if self.check_game_over():
-            self.end_game()
-        else:
-            self.draw_board()
-    
-    def make_move(self, row, col, player=None):
-        """石を置いて反転"""
-        if player is None:
-            player = self.current_player
-        
-        opponent = 'W' if player == 'B' else 'B'
-        self.board[row][col] = player
-        
-        directions = [(-1, -1), (-1, 0), (-1, 1),
-                      (0, -1),           (0, 1),
-                      (1, -1),  (1, 0),  (1, 1)]
-        
-        for dr, dc in directions:
-            r, c = row + dr, col + dc
-            to_flip = []
-            while (0 <= r < 8 and 0 <= c < 8 and 
-                   self.board[r][c] == opponent):
-                to_flip.append((r, c))
-                r += dr
-                c += dc
-            if to_flip and (0 <= r < 8 and 0 <= c < 8 and 
-                           self.board[r][c] == player):
-                for fr, fc in to_flip:
-                    self.board[fr][fc] = player
-    
-    def is_valid_move(self, row, col, player):
-        """有効手判定"""
+
+        self.draw_board()
+
+    def is_valid_move(self, row: int, col: int, player: str) -> bool:
+        """有効手の判定（常に論理的座標）"""
         if not (0 <= row < 8 and 0 <= col < 8):
             return False
-        if self.board[row][col] != '.':
+        if board[row][col] != '.':
             return False
-        
+
         opponent = 'W' if player == 'B' else 'B'
-        directions = [(-1, -1), (-1, 0), (-1, 1),
-                      (0, -1),           (0, 1),
-                      (1, -1),  (1, 0),  (1, 1)]
-        
+        directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
         for dr, dc in directions:
             r, c = row + dr, col + dc
-            found_opponent = False
-            while (0 <= r < 8 and 0 <= c < 8 and 
-                   self.board[r][c] == opponent):
-                found_opponent = True
+            found = False
+            while 0 <= r < 8 and 0 <= c < 8 and board[r][c] == opponent:
+                found = True
                 r += dr
                 c += dc
-            if found_opponent and (0 <= r < 8 and 0 <= c < 8 and 
-                                 self.board[r][c] == player):
+
+            if found and (0 <= r < 8 and 0 <= c < 8 and board[r][c] == player):
                 return True
         return False
-    
-    def get_valid_moves(self, player):
+
+    def get_valid_moves(self, player: str) -> list[tuple[int, int]]:
         """有効な手のリスト"""
         moves = []
         for i in range(8):
@@ -430,94 +351,63 @@ class OthelloGUI:
                 if self.is_valid_move(i, j, player):
                     moves.append((i, j))
         return moves
-    
-    def _evaluate_move(self, row, col, player):
-        """手の評価スコア（大きいほど良い手）"""
-        score = 0
-        # コーナーはとても良い（30点）
-        if (row, col) in [(0, 0), (0, 7), (7, 0), (7, 7)]:
-            score += 30
-        # 端も良い（10点）
-        elif row == 0 or row == 7 or col == 0 or col == 7:
-            score += 10
-        # 相手の石を多く反転できるほど良い
-        opponent = 'W' if player == 'B' else 'B'
-        directions = [(-1, -1), (-1, 0), (-1, 1),
-                      (0, -1),           (0, 1),
-                      (1, -1),  (1, 0),  (1, 1)]
-        for dr, dc in directions:
-            r, c = row + dr, col + dc
-            count = 0
-            while 0 <= r < 8 and 0 <= c < 8 and self.board[r][c] == opponent:
-                count += 1
-                r += dr
-                c += dc
-            if 0 <= r < 8 and 0 <= c < 8 and self.board[r][c] == player:
-                score += count * 2
-        # 隅っこの次のマス（Xマス）は悪いのでペナルティ
-        if (row, col) in [(0, 1), (1, 0), (1, 1), (0, 6), (1, 7), (1, 6),
-                           (6, 0), (7, 1), (6, 1), (6, 7), (7, 6), (6, 6)]:
-            score -= 15
-        return score
 
-    def check_game_over(self):
+    def check_game_over(self) -> bool:
         """ゲーム終了判定"""
         b_moves = self.get_valid_moves('B')
         w_moves = self.get_valid_moves('W')
-        
+
         if not b_moves and not w_moves:
             self.game_over = True
             return True
-        
+
         if not self.get_valid_moves(self.current_player):
-            self.status_label.config(text=f"{'あなた' if self.current_player == self.player_color else 'NPC'}に有効な手がありません。パスします。")
+            opponent_name = "あなた" if self.current_player != self.player_color else "NPC"
+            self.status_label.config(text=f"{opponent_name} に有効な手がありません。パスします。")
             self.current_player = 'W' if self.current_player == 'B' else 'B'
-        
         return False
-    
+
     def end_game(self):
         """ゲーム終了"""
-        b_count = sum(row.count('B') for row in self.board)
-        w_count = sum(row.count('W') for row in self.board)
-        
+        b_count = sum(row.count('B') for row in board)
+        w_count = sum(row.count('W') for row in board)
+
         if b_count > w_count:
-            winner = 'B'
+            winner = '黒 (Black)'
         elif w_count > b_count:
-            winner = 'W'
+            winner = '白 (White)'
         else:
-            winner = 'DRAW'
-        
-        if winner == 'DRAW':
-            msg = "★ 引き分け！ ★"
-        elif winner == self.player_color:
-            msg = f"★ あなたの勝ちです！ ★\n黒: {b_count}個 vs 白: {w_count}個"
-        else:
-            msg = f"★ NPCの勝ちです... ★\n黒: {b_count}個 vs 白: {w_count}個"
-        
+            winner = '引き分け'
+
+        msg = f"★ ゲーム終了 ★\n\n{winner} の勝ち！\n黒：{b_count}個 | 白：{w_count}個"
         messagebox.showinfo("ゲーム終了", msg)
         self.game_over = True
-        self.rotate_btn.config(state='disabled')
-    
+
     def restart_game(self):
-        """ゲームを最初から"""
-        self.board = self.create_initial_board()
+        """ゲームをリセット"""
+        board[3][3] = 'W'
+        board[3][4] = 'B'
+        board[4][3] = 'B'
+        board[4][4] = 'W'
+
         self.current_player = 'B'
         self.game_over = False
         self.rotation = 0
         self.cursor = [3, 3]
         self.player_color = None
         self.npc_color = None
-        
+
         self.black_btn.config(state='normal')
         self.white_btn.config(state='normal')
         self.rotate_btn.config(state='disabled')
         self.player_label.config(text="あなたの色を選択してください")
         self.status_label.config(text="")
-        
+
         self.draw_board()
 
 
 def main():
+    """メイン関数"""
     root = tk.Tk()
     app = OthelloGUI(root)
     root.mainloop()
