@@ -8,12 +8,52 @@ class OthelloGame:
         self.current_player = 'B'   # B: Black(黒), W: White(白)
         self.game_over = False
         self.cursor = [3, 3]        # カーソル位置 [row, col]
-        self.rotation = 0           # ボード回転回数（0:通常,1:90°,2:180°,3:270°）
+        self.rotation = 0           # ボード回転回数（0:通常，1:90°,2:180°,3:270°）
         self.player_color = None    # プレイヤーの色
-        self.npc_color = None       # NPCの色
-        self.difficulty = 'medium'  # NPCの難易度（easy, medium, hard）
-    
-    # ---------- 盤面作成 ----------
+        self.npc_color = None       # NPC の色
+        self.difficulty = 'medium'  # NPC の難易度（easy, medium, hard）
+
+    def save_game(self, filepath=None):
+        """ゲーム状態を JSON ファイルに保存する"""
+        import json
+        if filepath is None:
+            filepath = 'game_state.json'
+        state = {
+            'board': self.board,
+            'current_player': self.current_player,
+            'game_over': self.game_over,
+            'cursor': self.cursor,
+            'rotation': self.rotation,
+            'player_color': self.player_color,
+            'npc_color': self.npc_color,
+            'difficulty': self.difficulty
+        }
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False)
+        print(f"  ゲーム状態を保存しました：{filepath}")
+
+    def load_game(self, filepath=None):
+        """ゲーム状態を JSON ファイルから読み込む"""
+        import json
+        if filepath is None:
+            filepath = 'game_state.json'
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+        except FileNotFoundError:
+            print(f"  保存ファイルが見つかりません：{filepath}")
+            return False
+        self.board = state['board']
+        self.current_player = state['current_player']
+        self.game_over = state['game_over']
+        self.cursor = state['cursor']
+        self.rotation = state['rotation']
+        self.player_color = state['player_color']
+        self.npc_color = state['npc_color']
+        self.difficulty = state['difficulty']
+        print(f"  ゲーム状態をロードしました：{filepath}")
+        return True
+
     def create_initial_board(self):
         board = [['.' for _ in range(8)] for _ in range(8)]
         board[3][3] = 'W'
@@ -334,16 +374,20 @@ class OthelloGame:
             print("\n" + "╔" + "═" * 48 + "╗")
             print("║" + "   ゲーム終了！".center(48) + "║")
             print("╚" + "═" * 48 + "╝")
-            print(f"\n  黒(Black): {b}個")
-            print(f"  白(White): {w}個")
-            
+            print(f"\n  黒 (Black): {b}個")
+            print(f"  白 (White): {w}個")
+
             if winner == 'DRAW':
-                print("\n  ★ 結果: 引き分け！ ★")
+                print("\n  ★ 結果：引き分け！★ ")
             elif winner == self.player_color:
-                print(f"\n  ★ あなたの勝ちです！ ★ （{'黒' if self.player_color == 'B' else '白'} {b if self.player_color == 'B' else w}個 vs {'白' if self.player_color == 'B' else '黒'} {w if self.player_color == 'B' else b}個）")
+                print(f"\n  ★ あなたの勝ちです！★ （{'黒' if self.player_color == 'B' else '白'} {b if self.player_color == 'B' else w}個 vs {'白' if self.player_color == 'B' else '黒'} {w if self.player_color == 'B' else b}個）")
             else:
-                print(f"\n  ★ NPCの勝ちです... ★ （{'黒' if self.npc_color == 'B' else '白'} {b if self.npc_color == 'B' else w}個 vs {'白' if self.npc_color == 'B' else '黒'} {w if self.npc_color == 'B' else b}個）")
+                print(f"\n  ★ NPC の勝ちです... ★ （{'黒' if self.npc_color == 'B' else '白'} {b if self.npc_color == 'B' else w}個 vs {'白' if self.npc_color == 'B' else '黒'} {w if self.npc_color == 'B' else b}個）")
             print()
+
+            # ゲーム終了時に状態を保存
+            save_path = input("ゲーム状態を保存します。ファイル名 (Enter で game_state.json) > ").strip() or "game_state.json"
+            self.save_game(save_path)
 
     def _get_key(self):
         """単一キー入力（Windows用 msvcrt）"""
